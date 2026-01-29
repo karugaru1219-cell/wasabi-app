@@ -1,10 +1,35 @@
-
 import { createClient } from '@supabase/supabase-js';
 
-// Fixed: Using process.env instead of import.meta.env as 'env' property is not recognized on ImportMeta in this context.
-const supabaseUrl = process.env.VITE_SUPABASE_URL || 'https://your-project-url.supabase.co';
-const supabaseAnonKey = process.env.VITE_SUPABASE_ANON_KEY || 'your-anon-key';
+/**
+ * Vite + Vercel 環境下で確実に環境変数を取得するためのヘルパー
+ */
+const getEnv = (key: string): string => {
+    // @ts-ignore
+    const env = import.meta.env || {};
+    return env[key] || '';
+};
 
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+const supabaseUrl = getEnv('VITE_SUPABASE_URL');
+const supabaseAnonKey = getEnv('VITE_SUPABASE_ANON_KEY');
 
-export const isSupabaseConfigured = !supabaseUrl.includes('your-project-url');
+/**
+ * Supabaseが正しく設定されているかチェック
+ */
+export const isSupabaseConfigured =
+    !!supabaseUrl &&
+    !!supabaseAnonKey &&
+    supabaseUrl.startsWith('https://') &&
+    !supabaseUrl.includes('placeholder');
+
+// デバッグ用（本番では無視されます）
+if (!isSupabaseConfigured) {
+    console.warn("⚠️ WASABI: Database connection is not established.");
+}
+
+/**
+ * Supabase クライアント
+ */
+export const supabase = createClient(
+    supabaseUrl || 'https://placeholder-v1.supabase.co',
+    supabaseAnonKey || 'placeholder'
+);
