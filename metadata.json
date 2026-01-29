@@ -1,0 +1,5 @@
+{
+  "name": "hikaru",
+  "description": "Centralized system for shift requests, attendance tracking, and payroll calculation. Optimized for mobile use to reduce administrative burden.",
+  "requestFramePermissions": []
+}
