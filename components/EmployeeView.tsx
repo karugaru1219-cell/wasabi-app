@@ -5,9 +5,10 @@ import { TIME_OPTIONS } from '../constants';
 import { useData } from '../context/DataContext';
 
 const EmployeeView: React.FC = () => {
-  const { currentEmployee, shifts, attendance, settings, branches, actions } = useData();
+  const { currentEmployee, shifts, attendance, settings, branches, employees, actions } = useData();
   const [activeTab, setActiveTab] = useState<'SHIFT' | 'PAYROLL' | 'SETTINGS'>('SHIFT');
-  
+  const [tempPassword, setTempPassword] = useState('');
+
   const today = new Date();
   const [period, setPeriod] = useState<ShiftPeriod>({
     year: today.getFullYear(),
@@ -45,6 +46,7 @@ const EmployeeView: React.FC = () => {
     const initial: Record<string, Partial<ShiftRequest>> = {};
     shifts.filter(s => s.employeeId === currentEmployee?.id).forEach(s => { initial[s.date] = s; });
     setLocalShifts(initial);
+    if (currentEmployee) setTempPassword(currentEmployee.password);
   }, [shifts, currentEmployee]);
 
   const handleQuickAction = (date: string, action: 'FULL' | 'OFF') => {
@@ -69,7 +71,7 @@ const EmployeeView: React.FC = () => {
     setLocalShifts(prev => ({ ...prev, [date]: { ...prev[date], [field]: value } }));
   };
 
-  const handleSave = () => {
+  const handleSaveShifts = () => {
     if (!currentEmployee) return;
     const myNewShifts: ShiftRequest[] = currentPeriodDates
       .map(date => {
@@ -86,10 +88,20 @@ const EmployeeView: React.FC = () => {
           endTime: s?.endTime || `${settings.defaultEndHour.toString().padStart(2, '0')}:00`,
         } as ShiftRequest;
       }).filter(Boolean) as ShiftRequest[];
-    
+
     const otherShifts = shifts.filter(s => s.employeeId !== currentEmployee.id);
     actions.updateShifts([...otherShifts, ...myNewShifts]);
-    alert('SUCCESS: Synchronization complete!');
+    alert('SUCCESS: Shifts Synchronized!');
+  };
+
+  const handleSaveProfile = () => {
+    if (!currentEmployee) return;
+    const updatedEmployees = employees.map(emp =>
+      emp.id === currentEmployee.id ? { ...emp, password: tempPassword } : emp
+    );
+    actions.updateEmployees(updatedEmployees);
+    actions.logAction('PROFILE_UPDATE', `${currentEmployee.name} updated their password.`);
+    alert('SUCCESS: Profile Security Updated!');
   };
 
   const filteredAttendance = useMemo(() => {
@@ -110,10 +122,10 @@ const EmployeeView: React.FC = () => {
   }, [filteredAttendance, settings.globalHourlyRate]);
 
   return (
-    <div className="space-y-6 max-w-lg mx-auto pb-20">
+    <div className="space-y-6 max-w-lg mx-auto pb-24">
       <nav className="flex bg-gray-100 p-1.5 rounded-[1.5rem] shadow-inner">
         {(['SHIFT', 'PAYROLL', 'SETTINGS'] as const).map(tab => (
-          <button 
+          <button
             key={tab}
             onClick={() => setActiveTab(tab)}
             className={`flex-1 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-white text-emerald-950 shadow-xl' : 'text-gray-400'}`}
@@ -133,10 +145,10 @@ const EmployeeView: React.FC = () => {
             </div>
             <div className="flex gap-2 relative z-10">
               <button onClick={() => setPeriod(p => p.part === 2 ? { ...p, part: 1 } : { year: p.month === 1 ? p.year - 1 : p.year, month: p.month === 1 ? 12 : p.month - 1, part: 2 })} className="w-11 h-11 flex items-center justify-center bg-white/10 rounded-2xl hover:bg-white/20 active:scale-90 transition-all">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M15 18l-6-6 6-6"/></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M15 18l-6-6 6-6" /></svg>
               </button>
               <button onClick={() => setPeriod(p => p.part === 1 ? { ...p, part: 2 } : { year: p.month === 12 ? p.year + 1 : p.year, month: p.month === 12 ? 1 : p.month + 1, part: 1 })} className="w-11 h-11 flex items-center justify-center bg-white/10 rounded-2xl hover:bg-white/20 active:scale-90 transition-all">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M9 18l6-6-6-6"/></svg>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M9 18l6-6-6-6" /></svg>
               </button>
             </div>
           </div>
@@ -157,16 +169,16 @@ const EmployeeView: React.FC = () => {
                       <span className={`text-[10px] font-black tracking-widest ${d.getDay() === 0 || d.getDay() === 6 ? 'text-red-400' : 'text-gray-300'}`}>{dayName}</span>
                       <span className="text-2xl font-black text-emerald-950 leading-none">{d.getDate()}</span>
                     </div>
-                    
+
                     {!isLocked && (
                       <div className="flex bg-gray-50 p-1 rounded-2xl shadow-inner">
-                        <button 
+                        <button
                           onClick={() => handleQuickAction(date, 'OFF')}
                           className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${!isWorking ? 'bg-white text-gray-400 shadow-sm' : 'text-gray-300'}`}
                         >
                           OFF
                         </button>
-                        <button 
+                        <button
                           onClick={() => handleQuickAction(date, 'FULL')}
                           className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${isWorking ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-300'}`}
                         >
@@ -181,9 +193,9 @@ const EmployeeView: React.FC = () => {
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1">
                           <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest pl-1">Start Time</label>
-                          <select 
-                            value={data.startTime} 
-                            onChange={(e) => handleFieldChange(date, 'startTime', e.target.value)} 
+                          <select
+                            value={data.startTime}
+                            onChange={(e) => handleFieldChange(date, 'startTime', e.target.value)}
                             className="w-full bg-white border border-gray-100 rounded-2xl px-3 py-3 text-sm font-black text-emerald-900 outline-none shadow-sm focus:border-lime-300"
                           >
                             {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
@@ -191,9 +203,9 @@ const EmployeeView: React.FC = () => {
                         </div>
                         <div className="space-y-1">
                           <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest pl-1">End Time</label>
-                          <select 
-                            value={data.endTime} 
-                            onChange={(e) => handleFieldChange(date, 'endTime', e.target.value)} 
+                          <select
+                            value={data.endTime}
+                            onChange={(e) => handleFieldChange(date, 'endTime', e.target.value)}
                             className="w-full bg-white border border-gray-100 rounded-2xl px-3 py-3 text-sm font-black text-emerald-900 outline-none shadow-sm focus:border-lime-300"
                           >
                             {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
@@ -221,12 +233,14 @@ const EmployeeView: React.FC = () => {
             })}
           </div>
 
-          <button 
-            onClick={handleSave} 
-            className="w-full max-w-lg mx-auto fixed bottom-6 left-6 right-6 bg-lime-500 text-white font-black py-5 rounded-[2.5rem] text-xs uppercase tracking-[0.2em] shadow-2xl active:scale-95 transition-all hover:bg-lime-600 z-40 border-b-4 border-lime-700"
-          >
-            UPDATE WASABI ENGINE
-          </button>
+          <div className="fixed bottom-6 left-6 right-6 z-40 max-w-lg mx-auto">
+            <button
+              onClick={handleSaveShifts}
+              className="w-full bg-lime-500 text-white font-black py-5 rounded-[2.5rem] text-xs uppercase tracking-[0.2em] shadow-2xl active:scale-95 transition-all hover:bg-lime-600 border-b-4 border-lime-700"
+            >
+              UPDATE SHIFT REQUESTS
+            </button>
+          </div>
         </div>
       )}
 
@@ -250,7 +264,7 @@ const EmployeeView: React.FC = () => {
             </div>
             <p className="text-[9px] font-bold text-gray-300 uppercase tracking-widest mt-4">Standard Rate: {settings.globalHourlyRate.toLocaleString()} UZS/hr</p>
           </div>
-          
+
           <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden">
             <div className="p-6 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
               <h3 className="text-[10px] font-black text-emerald-950 uppercase tracking-[0.2em]">Verified History</h3>
@@ -279,25 +293,43 @@ const EmployeeView: React.FC = () => {
       )}
 
       {activeTab === 'SETTINGS' && (
-        <div className="bg-white rounded-[3rem] p-10 border border-gray-50 space-y-10 shadow-xl animate-in fade-in zoom-in-95">
-          <div className="text-center">
-            <div className="w-24 h-24 bg-emerald-950 rounded-[2.5rem] flex items-center justify-center mx-auto mb-8 shadow-2xl relative overflow-hidden">
-              <div className="absolute inset-0 bg-lime-500/20 blur-xl"></div>
-              <span className="text-5xl relative z-10">🛡️</span>
+        <div className="space-y-6">
+          <div className="bg-white rounded-[3rem] p-10 border border-gray-50 space-y-10 shadow-xl animate-in fade-in zoom-in-95">
+            <div className="text-center">
+              <div className="w-24 h-24 bg-emerald-950 rounded-[2.5rem] flex items-center justify-center mx-auto mb-8 shadow-2xl relative overflow-hidden">
+                <div className="absolute inset-0 bg-lime-500/20 blur-xl"></div>
+                <span className="text-5xl relative z-10">🛡️</span>
+              </div>
+              <h3 className="text-xl font-black uppercase text-emerald-950 tracking-tighter">Profile Security</h3>
+              <p className="text-[11px] font-bold text-gray-400 uppercase mt-2 tracking-widest">Employee Credentials</p>
             </div>
-            <h3 className="text-xl font-black uppercase text-emerald-950 tracking-tighter">Profile Security</h3>
-            <p className="text-[11px] font-bold text-gray-400 uppercase mt-2 tracking-widest">Employee Credentials</p>
+            <div className="space-y-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-gray-400 uppercase block tracking-[0.2em] ml-1">Current Secret Key</label>
+                <div className="w-full bg-gray-50 border border-gray-100 rounded-[1.5rem] px-6 py-5 font-black text-base text-gray-400 cursor-not-allowed shadow-inner">
+                  {currentEmployee?.password}
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-emerald-600 uppercase block tracking-[0.2em] ml-1">New Secret Key</label>
+                <input
+                  type="text"
+                  value={tempPassword}
+                  placeholder="Enter new secret code"
+                  className="w-full bg-white border-2 border-emerald-100 rounded-[1.5rem] px-6 py-5 font-black text-base text-emerald-950 outline-none focus:border-lime-400 transition-all shadow-lg"
+                  onChange={(e) => setTempPassword(e.target.value)}
+                />
+              </div>
+            </div>
           </div>
-          <div className="space-y-6">
-            <div className="space-y-2">
-              <label className="text-[10px] font-black text-gray-400 uppercase block tracking-[0.2em] ml-1">New Access Key</label>
-              <input 
-                type="text" 
-                placeholder="Enter new secret code" 
-                className="w-full bg-gray-50 border-2 border-transparent border-gray-100 rounded-[1.5rem] px-6 py-5 font-black text-base text-emerald-950 outline-none focus:border-lime-400 transition-all shadow-inner"
-                onChange={(e) => actions.updateEmployees(useData().employees.map(emp => emp.id === currentEmployee?.id ? { ...emp, password: e.target.value } : emp))} 
-              />
-            </div>
+
+          <div className="fixed bottom-6 left-6 right-6 z-40 max-w-lg mx-auto">
+            <button
+              onClick={handleSaveProfile}
+              className="w-full bg-emerald-900 text-white font-black py-5 rounded-[2.5rem] text-xs uppercase tracking-[0.2em] shadow-2xl active:scale-95 transition-all hover:bg-emerald-950 border-b-4 border-black"
+            >
+              UPDATE SECURITY PROFILE
+            </button>
           </div>
         </div>
       )}
