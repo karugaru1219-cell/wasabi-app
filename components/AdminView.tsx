@@ -13,6 +13,7 @@ const AdminView: React.FC = () => {
 
   const [summaryYear, setSummaryYear] = useState(new Date().getFullYear());
   const [summaryMonth, setSummaryMonth] = useState(new Date().getMonth() + 1);
+  const [selectedStatementEmployee, setSelectedStatementEmployee] = useState<string | null>(null);
 
   // Local state for Master edits
   const [localEmployees, setLocalEmployees] = useState<Employee[]>([]);
@@ -123,16 +124,30 @@ const AdminView: React.FC = () => {
         const d = new Date(a.date);
         return a.employeeId === emp.id && a.isWorking &&
           (d.getMonth() + 1) === summaryMonth && d.getFullYear() === summaryYear;
-      });
+      }).sort((a, b) => a.date.localeCompare(b.date));
+
       const totalHours = records.reduce((acc, r) => acc + calculateHoursPrecise(r.startTime, r.endTime), 0);
       const totalBonus = records.reduce((acc, r) => acc + (r.bonus || 0), 0);
       const basePay = Math.round(totalHours * settings.globalHourlyRate);
-      return { id: emp.id, name: emp.name, hours: totalHours, basePay, bonus: totalBonus, total: basePay + totalBonus };
+      return {
+        id: emp.id,
+        name: emp.name,
+        hours: totalHours,
+        basePay,
+        bonus: totalBonus,
+        total: basePay + totalBonus,
+        records
+      };
     });
     const companyTotal = staffStats.reduce((acc, s) => acc + s.total, 0);
     const companyHours = staffStats.reduce((acc, s) => acc + s.hours, 0);
     return { staffStats, companyTotal, companyHours };
   }, [employees, attendance, summaryMonth, summaryYear, settings.globalHourlyRate]);
+
+  const activeStatement = useMemo(() => {
+    if (!selectedStatementEmployee) return null;
+    return payrollSummary.staffStats.find(s => s.id === selectedStatementEmployee);
+  }, [selectedStatementEmployee, payrollSummary]);
 
   const renderDayList = (datesArray: string[], title: string) => (
     <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2">
@@ -307,16 +322,94 @@ const AdminView: React.FC = () => {
           <div className="bg-white rounded-[2.5rem] border border-gray-100 divide-y divide-gray-50 overflow-hidden shadow-sm">
             {payrollSummary.staffStats.map(s => (
               <div key={s.id} className="p-7 flex justify-between items-center hover:bg-gray-50/50 transition-all">
-                <div>
+                <div className="flex-1">
                   <p className="font-black text-emerald-950 text-xl tracking-tighter">{s.name}</p>
                   <p className="text-[11px] text-gray-400 font-bold uppercase tracking-tight">{s.hours.toFixed(2)}h • {settings.globalHourlyRate.toLocaleString()} UZS</p>
                 </div>
-                <div className="text-right">
-                  <p className="font-black text-emerald-950 text-2xl tracking-tighter">{s.total.toLocaleString()} <span className="text-xs">UZS</span></p>
+                <div className="text-right flex items-center gap-4">
+                  <div>
+                    <p className="font-black text-emerald-950 text-2xl tracking-tighter">{s.total.toLocaleString()} <span className="text-xs">UZS</span></p>
+                  </div>
+                  <button
+                    onClick={() => setSelectedStatementEmployee(s.id)}
+                    className="bg-emerald-50 text-emerald-600 p-3 rounded-2xl hover:bg-emerald-100 transition-colors"
+                    title="View Detailed Statement"
+                  >
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>
+                  </button>
                 </div>
               </div>
             ))}
           </div>
+
+          {/* Individual Payroll Statement Modal */}
+          {activeStatement && (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-emerald-950/40 backdrop-blur-sm animate-in fade-in duration-200">
+              <div className="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+                <div className="p-8 bg-emerald-950 text-white flex justify-between items-center">
+                  <div>
+                    <h3 className="text-2xl font-black tracking-tighter uppercase">Pay Statement</h3>
+                    <p className="text-[10px] font-bold text-lime-400 tracking-[0.3em] uppercase">{activeStatement.name} / {summaryYear}-{String(summaryMonth).padStart(2, '0')}</p>
+                  </div>
+                  <button onClick={() => setSelectedStatementEmployee(null)} className="w-10 h-10 flex items-center justify-center bg-white/10 rounded-full hover:bg-white/20">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6L6 18M6 6l12 12" /></svg>
+                  </button>
+                </div>
+                <div className="p-8 overflow-y-auto no-scrollbar flex-1 space-y-6">
+                  <div className="space-y-1">
+                    <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Employee Summary</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="p-4 bg-gray-50 rounded-2xl">
+                        <p className="text-[8px] font-bold text-gray-400 uppercase">Base Hours</p>
+                        <p className="text-xl font-black text-emerald-950">{activeStatement.hours.toFixed(2)}h</p>
+                      </div>
+                      <div className="p-4 bg-gray-50 rounded-2xl">
+                        <p className="text-[8px] font-bold text-gray-400 uppercase">Total Bonuses</p>
+                        <p className="text-xl font-black text-emerald-950">{activeStatement.bonus.toLocaleString()} UZS</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-3">
+                    <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest pl-1">Daily Log</p>
+                    <div className="border border-gray-100 rounded-3xl overflow-hidden">
+                      <table className="w-full text-left">
+                        <thead>
+                          <tr className="bg-gray-50 text-[9px] font-black uppercase text-gray-400">
+                            <th className="px-4 py-3">Date</th>
+                            <th className="px-4 py-3 text-center">Hours</th>
+                            <th className="px-4 py-3 text-right">Pay + Bonus</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-gray-50">
+                          {activeStatement.records.map(r => {
+                            const h = calculateHoursPrecise(r.startTime, r.endTime);
+                            const pay = Math.round(h * settings.globalHourlyRate) + (r.bonus || 0);
+                            return (
+                              <tr key={r.id} className="text-[11px] font-bold text-emerald-900">
+                                <td className="px-4 py-3">{r.date.split('-')[2]}</td>
+                                <td className="px-4 py-3 text-center">{h.toFixed(1)}</td>
+                                <td className="px-4 py-3 text-right">{pay.toLocaleString()}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="pt-6 border-t-2 border-dashed border-gray-100 text-center">
+                    <p className="text-[11px] font-black text-emerald-600 uppercase tracking-[0.4em] mb-1">Final Total Payment</p>
+                    <p className="text-4xl font-black text-emerald-950 tracking-tighter">{activeStatement.total.toLocaleString()} <span className="text-lg">UZS</span></p>
+                  </div>
+                </div>
+                <div className="p-6 bg-gray-50 flex gap-4">
+                  <button onClick={() => window.print()} className="flex-1 bg-white border border-gray-200 text-gray-400 font-black py-4 rounded-2xl text-[10px] uppercase tracking-widest shadow-sm">Print Slip</button>
+                  <button onClick={() => setSelectedStatementEmployee(null)} className="flex-1 bg-emerald-950 text-white font-black py-4 rounded-2xl text-[10px] uppercase tracking-widest shadow-xl">Close View</button>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -351,8 +444,13 @@ const AdminView: React.FC = () => {
           </section>
 
           <section className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-xl space-y-8">
-            <h3 className="text-xs font-black uppercase tracking-[0.3em] text-emerald-950">Global Parameters</h3>
+            <h3 className="text-xs font-black uppercase tracking-[0.3em] text-emerald-950">Security & Deadlines</h3>
             <div className="grid gap-6">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black text-red-500 uppercase tracking-widest ml-1">Shift Lock Deadline</label>
+                <p className="text-[10px] text-gray-400 font-bold mb-2">Staff cannot edit shifts on or before this date.</p>
+                <input type="date" className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-5 font-black outline-none" value={localSettings.shiftLockDate} onChange={(e) => setLocalSettings({ ...localSettings, shiftLockDate: e.target.value })} />
+              </div>
               <div className="space-y-2">
                 <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Global Hourly Rate (UZS)</label>
                 <input type="number" className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-5 font-black text-xl outline-none" value={localSettings.globalHourlyRate} onChange={(e) => setLocalSettings({ ...localSettings, globalHourlyRate: Number(e.target.value) })} />

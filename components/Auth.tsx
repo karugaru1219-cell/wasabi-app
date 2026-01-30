@@ -39,7 +39,7 @@ const AuthScreen: React.FC = () => {
         <div className="text-center">
           <div className="text-6xl mb-6 animate-bounce duration-1000">🥬</div>
           <h1 className="text-4xl font-black text-emerald-950 tracking-tighter mb-1">WASABI MONEY</h1>
-          <p className="text-[11px] font-black text-lime-600 uppercase tracking-[0.5em]">Scheduling OS 3.3.3</p>
+          <p className="text-[11px] font-black text-lime-600 uppercase tracking-[0.5em]">Scheduling OS 3.4.1</p>
         </div>
 
         <div className="space-y-6">
