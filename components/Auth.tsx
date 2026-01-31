@@ -55,7 +55,7 @@ const AuthScreen: React.FC = () => {
                     <option value="">Select Identity...</option>
                     {sortedEmployees.map(e => <option key={e.id} value={e.id}>{e.name}</option>)}
                   </select>
-                  <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none opacity-30 group-hover:opacity-100 transition-opacity">
+                  <div className="absolute right-6 top-1/2 -translate-y-1/2 pointer-events-none opacity-30 group-hover:opacity-100 transition-opacity text-emerald-950">
                     <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M6 9l6 6 6-6" /></svg>
                   </div>
                 </div>
