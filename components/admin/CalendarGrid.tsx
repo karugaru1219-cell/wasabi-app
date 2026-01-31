@@ -8,7 +8,7 @@ interface CalendarGridProps {
 }
 
 export const CalendarGrid: React.FC<CalendarGridProps> = ({ selectedDate, onSelectDate }) => {
-  const { shifts, employees } = useData();
+  const { shifts, employees, attendance } = useData();
   const date = new Date(selectedDate);
   const year = date.getFullYear();
   const month = date.getMonth();
@@ -24,6 +24,15 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({ selectedDate, onSele
   const getDayStaff = (day: number) => {
     const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
     return shifts.filter(s => s.date === dStr && s.isWorking);
+  };
+
+  const isDayVerified = (day: number) => {
+    const dStr = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+    const workingStaffCount = shifts.filter(s => s.date === dStr && s.isWorking).length;
+    if (workingStaffCount === 0) return false;
+
+    const verifiedCount = attendance.filter(a => a.date === dStr && a.isWorking && a.isApproved).length;
+    return verifiedCount >= workingStaffCount;
   };
 
   return (
@@ -44,25 +53,33 @@ export const CalendarGrid: React.FC<CalendarGridProps> = ({ selectedDate, onSele
           if (day === null) return <div key={`empty-${idx}`} className="bg-white h-24 sm:h-32 opacity-20"></div>;
           const staff = getDayStaff(day);
           const isSelected = day === date.getDate();
-          
+          const verified = isDayVerified(day);
+
           return (
-            <button 
-              key={day} 
+            <button
+              key={day}
               onClick={() => onSelectDate(`${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`)}
-              className={`bg-white h-24 sm:h-32 p-1.5 sm:p-2 text-left transition-all hover:z-10 hover:shadow-2xl hover:scale-[1.02] flex flex-col ${isSelected ? 'ring-2 ring-lime-500 z-10' : ''}`}
+              className={`bg-white h-24 sm:h-32 p-1.5 sm:p-2 text-left transition-all hover:z-10 hover:shadow-2xl hover:scale-[1.02] flex flex-col ${isSelected ? 'ring-2 ring-lime-500 z-10' : ''} ${verified ? 'bg-emerald-50/20' : ''}`}
             >
-              <span className={`text-[10px] font-black mb-1 w-5 h-5 flex items-center justify-center rounded-md ${isSelected ? 'bg-lime-500 text-white' : 'text-gray-400'}`}>{day}</span>
+              <div className="flex justify-between items-start mb-1">
+                <span className={`text-[10px] font-black w-5 h-5 flex items-center justify-center rounded-md ${isSelected ? 'bg-lime-500 text-white' : 'text-gray-400'}`}>{day}</span>
+                {verified && (
+                  <div className="text-emerald-500">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><path d="M20 6L9 17l-5-5" /></svg>
+                  </div>
+                )}
+              </div>
               <div className="flex-1 overflow-y-auto no-scrollbar space-y-0.5">
                 {staff.map(s => {
                   const emp = employees.find(e => e.id === s.employeeId);
                   return (
-                    <div key={s.id} className="bg-emerald-50 text-emerald-700 text-[8px] sm:text-[9px] px-1 py-0.5 rounded font-black truncate border border-emerald-100/50">
+                    <div key={s.id} className={`text-[8px] sm:text-[9px] px-1 py-0.5 rounded font-black truncate border ${verified ? 'bg-emerald-100 text-emerald-800 border-emerald-200' : 'bg-emerald-50 text-emerald-700 border-emerald-100/50'}`}>
                       {emp?.name.charAt(0)}: {s.startTime.split(':')[0]}h
                     </div>
                   );
                 })}
               </div>
-              {staff.length > 0 && (
+              {staff.length > 0 && !verified && (
                 <div className="mt-auto pt-1 text-[8px] font-black text-lime-600 uppercase tracking-tighter">
                   {staff.length} Active
                 </div>
