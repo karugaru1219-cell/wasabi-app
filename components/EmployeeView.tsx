@@ -49,7 +49,6 @@ const EmployeeView: React.FC = () => {
     if (currentEmployee) setTempPassword(currentEmployee.password);
   }, [shifts, currentEmployee]);
 
-  // 実績テーブルで承認されているかチェック
   const isDateApprovedByAdmin = (date: string) => {
     return attendance.some(a => a.employeeId === currentEmployee?.id && a.date === date && a.isApproved);
   };
@@ -58,11 +57,7 @@ const EmployeeView: React.FC = () => {
     if (isDateApprovedByAdmin(date)) return;
     setLocalShifts(prev => ({
       ...prev,
-      [date]: action === 'OFF' ? {
-        ...prev[date],
-        isWorking: false,
-        date
-      } : {
+      [date]: action === 'OFF' ? { ...prev[date], isWorking: false, date } : {
         ...prev[date],
         isWorking: true,
         date,
@@ -80,18 +75,11 @@ const EmployeeView: React.FC = () => {
 
   const handleSaveShifts = () => {
     if (!currentEmployee) return;
-
-    // 現在の期間の日付について、最新の状態を構築
     const currentPeriodShifts: ShiftRequest[] = currentPeriodDates.map(date => {
       const s = localShifts[date];
-
-      // すでにアドミンが承認している日は、既存のデータをそのまま維持（ここでは上書きしない）
       if (isDateApprovedByAdmin(date)) {
-        const existing = shifts.find(orig => orig.employeeId === currentEmployee.id && orig.date === date);
-        return existing || null;
+        return shifts.find(orig => orig.employeeId === currentEmployee.id && orig.date === date) || null;
       }
-
-      // 未承認の日のみ新規・更新
       if (s && s.date) {
         return {
           id: s.id || crypto.randomUUID(),
@@ -106,10 +94,8 @@ const EmployeeView: React.FC = () => {
       return null;
     }).filter(Boolean) as ShiftRequest[];
 
-    // 「他の人のシフト」＋「自分の今回の期間以外のシフト」＋「自分の今回の期間の確定済み/未確定の最新シフト」
     const otherPeopleShifts = shifts.filter(s => s.employeeId !== currentEmployee.id);
     const myOtherPeriodShifts = shifts.filter(s => s.employeeId === currentEmployee.id && !currentPeriodDates.includes(s.date));
-
     actions.updateShifts([...otherPeopleShifts, ...myOtherPeriodShifts, ...currentPeriodShifts]);
     alert('SUCCESS: Shift Requests Updated!');
   };
@@ -122,29 +108,25 @@ const EmployeeView: React.FC = () => {
   }, [attendance, period, currentEmployee]);
 
   const payrollData = useMemo(() => {
+    const rateToUse = currentEmployee?.hourlyRate || settings.globalHourlyRate;
     const totalHours = filteredAttendance.reduce((acc, curr) => {
       if (!curr.isWorking) return acc;
       return acc + calculateHoursPrecise(curr.startTime, curr.endTime);
     }, 0);
     const totalBonus = filteredAttendance.reduce((acc, curr) => acc + (curr.bonus || 0), 0);
-    const totalPay = Math.round(totalHours * settings.globalHourlyRate) + totalBonus;
-    return { totalHours, totalBonus, totalPay };
-  }, [filteredAttendance, settings.globalHourlyRate]);
+    const totalPay = Math.round(totalHours * rateToUse) + totalBonus;
+    return { totalHours, totalBonus, totalPay, rate: rateToUse };
+  }, [filteredAttendance, settings.globalHourlyRate, currentEmployee]);
 
-  // Fix: handleSaveProfile function to save security profile changes
   const handleSaveProfile = () => {
     if (!currentEmployee) return;
     if (!tempPassword.trim()) {
-      alert('Secret Key cannot be empty.');
+      alert('Key cannot be empty.');
       return;
     }
-
-    const updatedEmployees = employees.map(emp =>
-      emp.id === currentEmployee.id ? { ...emp, password: tempPassword } : emp
-    );
-
+    const updatedEmployees = employees.map(emp => emp.id === currentEmployee.id ? { ...emp, password: tempPassword } : emp);
     actions.updateEmployees(updatedEmployees);
-    actions.logAction('PROFILE_UPDATE', `${currentEmployee.name} updated security secret key.`);
+    actions.logAction('PROFILE_UPDATE', `${currentEmployee.name} updated security key.`);
     alert('SUCCESS: Profile Security Key Updated!');
   };
 
@@ -152,11 +134,7 @@ const EmployeeView: React.FC = () => {
     <div className="space-y-6 max-w-lg mx-auto pb-24">
       <nav className="flex bg-gray-100 p-1.5 rounded-[1.5rem] shadow-inner">
         {(['SHIFT', 'PAYROLL', 'SETTINGS'] as const).map(tab => (
-          <button
-            key={tab}
-            onClick={() => setActiveTab(tab)}
-            className={`flex-1 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-white text-emerald-950 shadow-xl' : 'text-gray-400'}`}
-          >
+          <button key={tab} onClick={() => setActiveTab(tab)} className={`flex-1 py-3 rounded-2xl font-black text-[10px] uppercase tracking-widest transition-all ${activeTab === tab ? 'bg-white text-emerald-950 shadow-xl' : 'text-gray-400'}`}>
             {tab === 'SHIFT' ? 'Requests' : tab === 'PAYROLL' ? 'Earnings' : 'Profile'}
           </button>
         ))}
@@ -195,55 +173,28 @@ const EmployeeView: React.FC = () => {
                       <span className={`text-[10px] font-black tracking-widest ${d.getDay() === 0 || d.getDay() === 6 ? 'text-red-400' : 'text-gray-300'}`}>{dayName}</span>
                       <div className="flex items-center gap-2">
                         <span className="text-2xl font-black text-emerald-950 leading-none">{d.getDate()}</span>
-                        {isApproved && (
-                          <span className="flex items-center gap-1 bg-emerald-600 text-white text-[8px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest">
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><path d="M20 6L9 17l-5-5" /></svg>
-                            Verified
-                          </span>
-                        )}
+                        {isApproved && <span className="flex items-center gap-1 bg-emerald-600 text-white text-[8px] px-2 py-0.5 rounded-full font-black uppercase tracking-widest"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="4"><path d="M20 6L9 17l-5-5" /></svg>Verified</span>}
                       </div>
                     </div>
-
                     {!isApproved && (
                       <div className="flex bg-gray-50 p-1 rounded-2xl shadow-inner">
-                        <button
-                          onClick={() => handleQuickAction(date, 'OFF')}
-                          className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${!isWorking ? 'bg-white text-emerald-950 shadow-sm' : 'text-gray-300'}`}
-                        >
-                          OFF
-                        </button>
-                        <button
-                          onClick={() => handleQuickAction(date, 'FULL')}
-                          className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${isWorking ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-300'}`}
-                        >
-                          WORK
-                        </button>
+                        <button onClick={() => handleQuickAction(date, 'OFF')} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${!isWorking ? 'bg-white text-emerald-950 shadow-sm' : 'text-gray-300'}`}>OFF</button>
+                        <button onClick={() => handleQuickAction(date, 'FULL')} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${isWorking ? 'bg-emerald-600 text-white shadow-sm' : 'text-gray-300'}`}>WORK</button>
                       </div>
                     )}
                   </div>
-
                   {isWorking && (
                     <div className="space-y-4 animate-in zoom-in-95 duration-200">
                       <div className="grid grid-cols-2 gap-4">
                         <div className="space-y-1">
                           <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest pl-1">Start Time</label>
-                          <select
-                            disabled={isApproved}
-                            value={data.startTime}
-                            onChange={(e) => handleFieldChange(date, 'startTime', e.target.value)}
-                            className={`w-full bg-white border border-gray-100 rounded-2xl px-3 py-3 text-sm font-black text-emerald-950 outline-none shadow-sm ${isApproved ? 'opacity-50 cursor-not-allowed' : 'focus:border-lime-300'}`}
-                          >
+                          <select disabled={isApproved} value={data.startTime} onChange={(e) => handleFieldChange(date, 'startTime', e.target.value)} className="w-full bg-white border border-gray-100 rounded-2xl px-3 py-3 text-sm font-black text-emerald-950 outline-none shadow-sm">
                             {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
                           </select>
                         </div>
                         <div className="space-y-1">
                           <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest pl-1">End Time</label>
-                          <select
-                            disabled={isApproved}
-                            value={data.endTime}
-                            onChange={(e) => handleFieldChange(date, 'endTime', e.target.value)}
-                            className={`w-full bg-white border border-gray-100 rounded-2xl px-3 py-3 text-sm font-black text-emerald-950 outline-none shadow-sm ${isApproved ? 'opacity-50 cursor-not-allowed' : 'focus:border-lime-300'}`}
-                          >
+                          <select disabled={isApproved} value={data.endTime} onChange={(e) => handleFieldChange(date, 'endTime', e.target.value)} className="w-full bg-white border border-gray-100 rounded-2xl px-3 py-3 text-sm font-black text-emerald-950 outline-none shadow-sm">
                             {TIME_OPTIONS.map(t => <option key={t} value={t}>{t}</option>)}
                           </select>
                         </div>
@@ -252,12 +203,7 @@ const EmployeeView: React.FC = () => {
                         <label className="text-[8px] font-black text-gray-400 uppercase tracking-widest pl-1">Branch</label>
                         <div className="flex gap-2">
                           {branches.map(b => (
-                            <button
-                              key={b.id}
-                              disabled={isApproved}
-                              onClick={() => handleFieldChange(date, 'branchId', b.id)}
-                              className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all border-2 ${data.branchId === b.id ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-gray-50 border-transparent text-gray-400'} ${isApproved && data.branchId !== b.id ? 'hidden' : ''}`}
-                            >
+                            <button key={b.id} disabled={isApproved} onClick={() => handleFieldChange(date, 'branchId', b.id)} className={`flex-1 py-3 rounded-xl text-[10px] font-black uppercase transition-all border-2 ${data.branchId === b.id ? 'bg-emerald-50 border-emerald-500 text-emerald-700' : 'bg-gray-50 border-transparent text-gray-400'}`}>
                               {b.name}
                             </button>
                           ))}
@@ -269,14 +215,8 @@ const EmployeeView: React.FC = () => {
               );
             })}
           </div>
-
           <div className="fixed bottom-6 left-6 right-6 z-40 max-w-lg mx-auto">
-            <button
-              onClick={handleSaveShifts}
-              className="w-full bg-lime-500 text-white font-black py-5 rounded-[2.5rem] text-xs uppercase tracking-[0.2em] shadow-2xl active:scale-95 transition-all hover:bg-lime-600 border-b-4 border-lime-700"
-            >
-              UPDATE SHIFT REQUESTS
-            </button>
+            <button onClick={handleSaveShifts} className="w-full bg-lime-500 text-white font-black py-5 rounded-[2.5rem] text-xs uppercase tracking-[0.2em] shadow-2xl active:scale-95 transition-all border-b-4 border-lime-700">UPDATE SHIFT REQUESTS</button>
           </div>
         </div>
       )}
@@ -295,20 +235,19 @@ const EmployeeView: React.FC = () => {
                 <p className="font-black text-emerald-900 text-2xl">{payrollData.totalHours.toFixed(2)}<span className="text-sm opacity-30 ml-1">h</span></p>
               </div>
               <div className="text-center border-l border-gray-50">
-                <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-1">Incentives</p>
-                <p className="font-black text-lime-600 text-2xl truncate">{payrollData.totalBonus.toLocaleString()} <span className="text-xs">UZS</span></p>
+                <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest mb-1">Base Rate</p>
+                <p className="font-black text-lime-600 text-xl truncate">{payrollData.rate.toLocaleString()} <span className="text-[8px]">UZS/h</span></p>
               </div>
             </div>
           </div>
-
           <div className="bg-white rounded-[2rem] border border-gray-100 shadow-sm overflow-hidden">
             <div className="p-6 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
-              <h3 className="text-[10px] font-black text-emerald-950 uppercase tracking-[0.2em]">Verified Attendance Log</h3>
+              <h3 className="text-[10px] font-black text-emerald-950 uppercase tracking-[0.2em]">Verified Log</h3>
               <div className="w-2 h-2 rounded-full bg-lime-500 animate-pulse"></div>
             </div>
             <div className="divide-y divide-gray-50 max-h-[400px] overflow-y-auto no-scrollbar">
               {filteredAttendance.length === 0 ? (
-                <div className="p-16 text-center text-gray-300 text-[11px] font-black uppercase tracking-widest italic opacity-50">No verified shifts found</div>
+                <div className="p-16 text-center text-gray-300 text-[11px] font-black uppercase tracking-widest italic opacity-50">No verified shifts</div>
               ) : (
                 filteredAttendance.map(a => (
                   <div key={a.id} className="p-6 flex justify-between items-center hover:bg-emerald-50/30 transition-colors">
@@ -317,7 +256,7 @@ const EmployeeView: React.FC = () => {
                       <span className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">{a.startTime} → {a.endTime}</span>
                     </div>
                     <div className="text-right">
-                      <span className="font-black text-emerald-950 text-lg">{(Math.round(calculateHoursPrecise(a.startTime, a.endTime) * settings.globalHourlyRate) + (a.bonus || 0)).toLocaleString()}</span>
+                      <span className="font-black text-emerald-950 text-lg">{(Math.round(calculateHoursPrecise(a.startTime, a.endTime) * payrollData.rate) + (a.bonus || 0)).toLocaleString()}</span>
                       <span className="text-[10px] ml-1 text-gray-400 uppercase">UZS</span>
                     </div>
                   </div>
@@ -329,30 +268,19 @@ const EmployeeView: React.FC = () => {
       )}
 
       {activeTab === 'SETTINGS' && (
-        <div className="space-y-6 animate-in fade-in">
+        <div className="space-y-6 animate-in fade-in text-center">
           <div className="bg-white p-10 rounded-[3rem] border border-gray-50 shadow-sm space-y-8">
-            <div className="text-center space-y-2">
+            <div className="space-y-2">
               <div className="w-20 h-20 bg-lime-100 text-lime-600 rounded-3xl flex items-center justify-center text-4xl mx-auto shadow-inner">🥬</div>
               <h2 className="text-2xl font-black text-emerald-950 tracking-tighter">{currentEmployee?.name}</h2>
               <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest tracking-[0.3em]">Security Profile</p>
             </div>
-
             <div className="space-y-4 pt-4 border-t border-gray-50">
-              <div className="space-y-1">
-                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Personal Secret Key</label>
-                <input
-                  type="text"
-                  className="w-full bg-gray-50 border-2 border-transparent focus:border-lime-400 rounded-2xl px-6 py-4 font-black text-emerald-950 outline-none transition-all shadow-inner"
-                  value={tempPassword}
-                  onChange={(e) => setTempPassword(e.target.value)}
-                />
+              <div className="space-y-1 text-left">
+                <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Personal Key</label>
+                <input type="text" className="w-full bg-gray-50 border-2 border-transparent focus:border-lime-400 rounded-2xl px-6 py-4 font-black text-emerald-950 outline-none transition-all shadow-inner" value={tempPassword} onChange={(e) => setTempPassword(e.target.value)} />
               </div>
-              <button
-                onClick={handleSaveProfile}
-                className="w-full bg-emerald-950 text-white font-black py-5 rounded-2xl text-[10px] uppercase tracking-[0.2em] shadow-xl hover:bg-black transition-all"
-              >
-                UPDATE SECURITY PROFILE
-              </button>
+              <button onClick={handleSaveProfile} className="w-full bg-emerald-950 text-white font-black py-5 rounded-2xl text-[10px] uppercase tracking-[0.2em] shadow-xl hover:bg-black transition-all">UPDATE SECURITY KEY</button>
             </div>
           </div>
         </div>
