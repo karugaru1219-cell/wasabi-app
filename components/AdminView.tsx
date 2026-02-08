@@ -4,11 +4,13 @@ import { AttendanceRecord, Employee, Branch, SystemSettings } from '../types';
 import { useData } from '../context/DataContext';
 import { CalendarGrid } from './admin/CalendarGrid';
 import { ActionLogList } from './admin/ActionLogList';
+import { TimelineView } from './admin/TimelineView';
 
 const AdminView: React.FC = () => {
   const { branches, employees, shifts, attendance, settings, actions } = useData();
   const [activeTab, setActiveTab] = useState<'DAILY' | 'CALENDAR' | 'PAYROLL' | 'MASTER' | 'LOGS'>('DAILY');
   const [viewMode, setViewMode] = useState<'DAY' | 'WEEK' | 'MONTH'>('DAY');
+  const [displayType, setDisplayType] = useState<'LIST' | 'VISUAL'>('VISUAL');
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
 
   const [summaryYear, setSummaryYear] = useState(new Date().getFullYear());
@@ -167,82 +169,117 @@ const AdminView: React.FC = () => {
 
       {activeTab === 'DAILY' && (
         <div className="space-y-6 animate-in fade-in">
-          <div className="bg-white p-7 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-6">
-            <div className="space-y-1 w-full sm:w-auto">
-              <label className="text-[10px] font-black text-gray-400 uppercase block tracking-[0.2em]">Reference Date</label>
-              <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="text-3xl font-black text-emerald-950 outline-none bg-transparent tracking-tighter w-full sm:w-auto" />
+          <div className="bg-white p-7 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col gap-6">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
+              <div className="space-y-1 w-full sm:w-auto text-center sm:text-left">
+                <label className="text-[10px] font-black text-gray-400 uppercase block tracking-[0.2em]">Operations Reference</label>
+                <input type="date" value={selectedDate} onChange={(e) => setSelectedDate(e.target.value)} className="text-3xl font-black text-emerald-950 outline-none bg-transparent tracking-tighter w-full sm:w-auto" />
+              </div>
+              <div className="flex bg-gray-50 p-1.5 rounded-2xl shadow-inner w-full sm:w-auto">
+                {(['DAY', 'WEEK', 'MONTH'] as const).map(m => (
+                  <button key={m} onClick={() => setViewMode(m)} className={`flex-1 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${viewMode === m ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-400'}`}>{m}</button>
+                ))}
+              </div>
             </div>
-            <div className="flex bg-gray-50 p-1.5 rounded-2xl shadow-inner w-full sm:w-auto">
-              {(['DAY', 'WEEK', 'MONTH'] as const).map(m => (
-                <button key={m} onClick={() => setViewMode(m)} className={`flex-1 px-4 py-2 rounded-xl text-[10px] font-black uppercase transition-all ${viewMode === m ? 'bg-white text-emerald-600 shadow-sm' : 'text-gray-400'}`}>{m}</button>
+
+            <div className="flex bg-gray-100 p-1 rounded-xl self-center sm:self-end">
+              <button
+                onClick={() => setDisplayType('LIST')}
+                className={`px-4 py-2 rounded-lg text-[9px] font-black transition-all ${displayType === 'LIST' ? 'bg-white text-emerald-950 shadow-sm' : 'text-gray-400'}`}
+              >
+                LIST
+              </button>
+              <button
+                onClick={() => setDisplayType('VISUAL')}
+                className={`px-4 py-2 rounded-lg text-[9px] font-black transition-all ${displayType === 'VISUAL' ? 'bg-white text-emerald-950 shadow-sm' : 'text-gray-400'}`}
+              >
+                TIMELINE
+              </button>
+            </div>
+          </div>
+
+          {displayType === 'VISUAL' ? (
+            <div className="space-y-10">
+              {visibleDates.map(date => (
+                <div key={date} className="space-y-4 bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+                  <div className="flex items-center gap-3 px-2">
+                    <h4 className="text-lg font-black text-emerald-950">{date}</h4>
+                    <span className="text-[10px] font-black text-gray-300 uppercase tracking-widest">Visual Shift Map</span>
+                  </div>
+                  <TimelineView
+                    date={date}
+                    attendance={getAttendanceForDate(date)}
+                    onUpdate={(empId, updates) => handleUpdateRecordLocal(date, empId, updates)}
+                  />
+                </div>
               ))}
             </div>
-          </div>
+          ) : (
+            <div className="space-y-10">
+              {visibleDates.map(date => {
+                const dailyRecords = getAttendanceForDate(date);
+                const d = new Date(date);
+                const dayName = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'][d.getDay()];
+                const isWeekend = d.getDay() === 0 || d.getDay() === 6;
 
-          <div className="space-y-10">
-            {visibleDates.map(date => {
-              const dailyRecords = getAttendanceForDate(date);
-              const d = new Date(date);
-              const dayName = ['SUN', 'MON', 'TUE', 'WED', 'THU', 'FRI', 'SAT'][d.getDay()];
-              const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+                return (
+                  <div key={date} className="space-y-4">
+                    <div className="flex items-center gap-3 px-4">
+                      <span className={`text-xs font-black tracking-widest ${isWeekend ? 'text-red-400' : 'text-gray-300'}`}>{dayName}</span>
+                      <h4 className="text-lg font-black text-emerald-950">{date}</h4>
+                    </div>
 
-              return (
-                <div key={date} className="space-y-4">
-                  <div className="flex items-center gap-3 px-4">
-                    <span className={`text-xs font-black tracking-widest ${isWeekend ? 'text-red-400' : 'text-gray-300'}`}>{dayName}</span>
-                    <h4 className="text-lg font-black text-emerald-950">{date}</h4>
-                  </div>
-
-                  <div className="grid gap-3">
-                    {dailyRecords.map(record => {
-                      const emp = localEmployees.find(e => e.id === record.employeeId);
-                      return (
-                        <div key={record.employeeId} className={`bg-white p-5 rounded-[2.5rem] border-2 transition-all ${record.isApproved ? 'border-emerald-600 shadow-sm' : record.isWorking ? 'border-lime-500 bg-lime-50/5 shadow-md' : 'border-gray-50 opacity-50'}`}>
-                          <div className="flex justify-between items-center mb-4">
-                            <div className="flex flex-col">
-                              <div className="flex items-center gap-2">
-                                <span className="font-black text-emerald-950 text-xl tracking-tight leading-none">{emp?.name}</span>
-                                {record.isApproved && <span className="bg-emerald-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest">Verified</span>}
+                    <div className="grid gap-3">
+                      {dailyRecords.map(record => {
+                        const emp = localEmployees.find(e => e.id === record.employeeId);
+                        return (
+                          <div key={record.employeeId} className={`bg-white p-5 rounded-[2.5rem] border-2 transition-all ${record.isApproved ? 'border-emerald-600 shadow-sm' : record.isWorking ? 'border-lime-500 bg-lime-50/5 shadow-md' : 'border-gray-50 opacity-50'}`}>
+                            <div className="flex justify-between items-center mb-4">
+                              <div className="flex flex-col">
+                                <div className="flex items-center gap-2">
+                                  <span className="font-black text-emerald-950 text-xl tracking-tight leading-none">{emp?.name}</span>
+                                  {record.isApproved && <span className="bg-emerald-600 text-white text-[8px] font-black px-2 py-0.5 rounded-full uppercase tracking-widest">Verified</span>}
+                                </div>
+                                <span className="text-[10px] font-black text-lime-600 uppercase mt-1 tracking-widest">{localBranches.find(b => b.id === record.branchId)?.name || 'NO BRANCH'}</span>
                               </div>
-                              <span className="text-[10px] font-black text-lime-600 uppercase mt-1 tracking-widest">{localBranches.find(b => b.id === record.branchId)?.name || 'NO BRANCH'}</span>
+                              <button
+                                onClick={() => handleUpdateRecordLocal(date, record.employeeId, { isWorking: !record.isWorking })}
+                                className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${record.isWorking ? 'bg-emerald-600 text-white shadow-lg' : 'bg-gray-100 text-gray-400'}`}
+                              >
+                                {record.isWorking ? 'ON-DUTY' : 'OFF'}
+                              </button>
                             </div>
-                            <button
-                              onClick={() => handleUpdateRecordLocal(date, record.employeeId, { isWorking: !record.isWorking })}
-                              className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all ${record.isWorking ? 'bg-emerald-600 text-white shadow-lg' : 'bg-gray-100 text-gray-400'}`}
-                            >
-                              {record.isWorking ? 'ON-DUTY' : 'OFF'}
-                            </button>
+                            {record.isWorking && (
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-gray-100">
+                                <div className="space-y-1">
+                                  <label className="text-[8px] font-black text-gray-400 uppercase">Start</label>
+                                  <input type="time" value={record.startTime} onChange={(e) => handleUpdateRecordLocal(date, record.employeeId, { startTime: e.target.value })} className="w-full bg-gray-50 rounded-xl px-2 py-2 text-[11px] font-black" />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[8px] font-black text-gray-400 uppercase">End</label>
+                                  <input type="time" value={record.endTime} onChange={(e) => handleUpdateRecordLocal(date, record.employeeId, { endTime: e.target.value })} className="w-full bg-gray-50 rounded-xl px-2 py-2 text-[11px] font-black" />
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[8px] font-black text-gray-400 uppercase">Branch</label>
+                                  <select value={record.branchId} onChange={(e) => handleUpdateRecordLocal(date, record.employeeId, { branchId: e.target.value })} className="w-full bg-gray-50 rounded-xl px-2 py-2 text-[11px] font-black">
+                                    {localBranches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                  </select>
+                                </div>
+                                <div className="space-y-1">
+                                  <label className="text-[8px] font-black text-gray-400 uppercase">Bonus</label>
+                                  <input type="number" placeholder="Bonus" value={record.bonus || ''} onChange={(e) => handleUpdateRecordLocal(date, record.employeeId, { bonus: Number(e.target.value) })} className="w-full bg-gray-50 rounded-xl px-2 py-2 text-[11px] font-black" />
+                                </div>
+                              </div>
+                            )}
                           </div>
-                          {record.isWorking && (
-                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-gray-100">
-                              <div className="space-y-1">
-                                <label className="text-[8px] font-black text-gray-400 uppercase">Start</label>
-                                <input type="time" value={record.startTime} onChange={(e) => handleUpdateRecordLocal(date, record.employeeId, { startTime: e.target.value })} className="w-full bg-gray-50 rounded-xl px-2 py-2 text-[11px] font-black" />
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-[8px] font-black text-gray-400 uppercase">End</label>
-                                <input type="time" value={record.endTime} onChange={(e) => handleUpdateRecordLocal(date, record.employeeId, { endTime: e.target.value })} className="w-full bg-gray-50 rounded-xl px-2 py-2 text-[11px] font-black" />
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-[8px] font-black text-gray-400 uppercase">Branch</label>
-                                <select value={record.branchId} onChange={(e) => handleUpdateRecordLocal(date, record.employeeId, { branchId: e.target.value })} className="w-full bg-gray-50 rounded-xl px-2 py-2 text-[11px] font-black">
-                                  {localBranches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
-                                </select>
-                              </div>
-                              <div className="space-y-1">
-                                <label className="text-[8px] font-black text-gray-400 uppercase">Bonus</label>
-                                <input type="number" placeholder="Bonus" value={record.bonus || ''} onChange={(e) => handleUpdateRecordLocal(date, record.employeeId, { bonus: Number(e.target.value) })} className="w-full bg-gray-50 rounded-xl px-2 py-2 text-[11px] font-black" />
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
 
           <div className="fixed bottom-6 left-6 right-6 z-40 max-w-2xl mx-auto">
             <button onClick={handleSyncDaily} className="w-full bg-lime-500 text-white font-black py-5 rounded-[2.5rem] text-xs uppercase tracking-[0.2em] shadow-2xl active:scale-95 transition-all border-b-4 border-lime-700">COMMIT & LOCK ALL VISIBLE</button>
