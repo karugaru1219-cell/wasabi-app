@@ -17,7 +17,6 @@ const AdminView: React.FC = () => {
   const [summaryMonth, setSummaryMonth] = useState(new Date().getMonth() + 1);
   const [selectedStatementEmployee, setSelectedStatementEmployee] = useState<string | null>(null);
 
-  // ローカルでの編集用ステート（DBの値を初期値とする）
   const [localAttendance, setLocalAttendance] = useState<AttendanceRecord[]>([]);
 
   useEffect(() => {
@@ -30,7 +29,7 @@ const AdminView: React.FC = () => {
     const [eH, eM] = end.split(':').map(Number);
     let startTotal = sH + sM / 60;
     let endTotal = eH + eM / 60;
-    if (endTotal < startTotal) endTotal += 24; // 深夜跨ぎ
+    if (endTotal < startTotal) endTotal += 24;
     const diff = endTotal - startTotal;
     return diff > 0 ? diff : 0;
   };
@@ -93,9 +92,7 @@ const AdminView: React.FC = () => {
   };
 
   const handleSyncDaily = () => {
-    // 既存のステートをベースに、表示中の変更分だけを上書きマージ（データ消失防止）
     let finalPayload = [...attendance];
-
     visibleDates.forEach(date => {
       const dailyRecords = getAttendanceForDate(date);
       dailyRecords.forEach(rec => {
@@ -108,20 +105,18 @@ const AdminView: React.FC = () => {
         }
       });
     });
-
     actions.updateAttendance(finalPayload);
-    actions.logAction('DAILY_VERIFY', `COMMIT: ${visibleDates.length} days range.`);
-    alert('SUCCESS: Records verified and synchronized.');
+    actions.logAction('DAILY_VERIFY', `COMMIT: Branch/Bonus sync for ${visibleDates.length} days.`);
+    alert('SUCCESS: Attendance verified and Branch/Bonus updated.');
   };
 
   const payrollSummary = useMemo(() => {
     const staffStats = employees.map(emp => {
-      // 指定年月の確定済みデータのみ抽出
       const records = attendance.filter(a => {
         const d = new Date(a.date);
         return a.employeeId === emp.id && a.isWorking && a.isApproved &&
           (d.getMonth() + 1) === summaryMonth && d.getFullYear() === summaryYear;
-      }).sort((a, b) => a.date.localeCompare(b.date)); // 日付順ソート
+      }).sort((a, b) => a.date.localeCompare(b.date));
 
       const rateToUse = emp.hourlyRate || settings.globalHourlyRate;
       const totalHours = records.reduce((acc, r) => acc + calculateHoursPrecise(r.startTime, r.endTime), 0);
@@ -138,7 +133,7 @@ const AdminView: React.FC = () => {
         total: basePay + totalBonus,
         records
       };
-    }).sort((a, b) => b.total - a.total); // 給与高い順
+    }).sort((a, b) => b.total - a.total);
 
     return { staffStats, companyTotal: staffStats.reduce((acc, s) => acc + s.total, 0), companyHours: staffStats.reduce((acc, s) => acc + s.hours, 0) };
   }, [employees, attendance, summaryMonth, summaryYear, settings.globalHourlyRate]);
@@ -212,7 +207,7 @@ const AdminView: React.FC = () => {
                             <button onClick={() => handleUpdateRecordLocal(date, record.employeeId, { isWorking: !record.isWorking })} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase transition-all ${record.isWorking ? 'bg-emerald-600 text-white' : 'bg-gray-100 text-gray-400'}`}>{record.isWorking ? 'WORKING' : 'OFF'}</button>
                           </div>
                           {record.isWorking && (
-                            <div className="grid grid-cols-2 gap-3 pt-4 border-t border-gray-100">
+                            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-gray-100">
                               <div className="space-y-1">
                                 <label className="text-[8px] font-black text-gray-400 uppercase">Start</label>
                                 <input type="time" value={record.startTime} onChange={(e) => handleUpdateRecordLocal(date, record.employeeId, { startTime: e.target.value })} className="w-full bg-gray-50 rounded-xl px-2 py-2 text-[11px] font-black" />
@@ -220,6 +215,16 @@ const AdminView: React.FC = () => {
                               <div className="space-y-1">
                                 <label className="text-[8px] font-black text-gray-400 uppercase">End</label>
                                 <input type="time" value={record.endTime} onChange={(e) => handleUpdateRecordLocal(date, record.employeeId, { endTime: e.target.value })} className="w-full bg-gray-50 rounded-xl px-2 py-2 text-[11px] font-black" />
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[8px] font-black text-gray-400 uppercase">Branch</label>
+                                <select value={record.branchId} onChange={(e) => handleUpdateRecordLocal(date, record.employeeId, { branchId: e.target.value })} className="w-full bg-gray-50 rounded-xl px-2 py-2 text-[11px] font-black">
+                                  {branches.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}
+                                </select>
+                              </div>
+                              <div className="space-y-1">
+                                <label className="text-[8px] font-black text-gray-400 uppercase">Bonus</label>
+                                <input type="number" value={record.bonus || ''} onChange={(e) => handleUpdateRecordLocal(date, record.employeeId, { bonus: Number(e.target.value) })} placeholder="0" className="w-full bg-gray-50 rounded-xl px-2 py-2 text-[11px] font-black" />
                               </div>
                             </div>
                           )}

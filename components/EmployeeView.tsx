@@ -10,14 +10,12 @@ const EmployeeView: React.FC = () => {
   const [tempPassword, setTempPassword] = useState('');
 
   const today = new Date();
-  // シフト申請用期間
   const [period, setPeriod] = useState<ShiftPeriod>({
     year: today.getFullYear(),
     month: today.getMonth() + 1,
     part: today.getDate() <= 15 ? 1 : 2
   });
 
-  // 給料明細用期間（申請期間とは別に独立して遡れるようにする）
   const [payrollYear, setPayrollYear] = useState(today.getFullYear());
   const [payrollMonth, setPayrollMonth] = useState(today.getMonth() + 1);
 
@@ -46,14 +44,11 @@ const EmployeeView: React.FC = () => {
 
   const [localShifts, setLocalShifts] = useState<Record<string, Partial<ShiftRequest>>>({});
 
-  // データマージロジック
   useEffect(() => {
     const merged: Record<string, Partial<ShiftRequest>> = {};
-    // 1. シフト希望
     shifts.filter(s => s.employeeId === currentEmployee?.id).forEach(s => {
       merged[s.date] = s;
     });
-    // 2. 確定済み実績で上書き
     attendance.filter(a => a.employeeId === currentEmployee?.id && a.isApproved).forEach(a => {
       merged[a.date] = { ...a };
     });
@@ -117,7 +112,7 @@ const EmployeeView: React.FC = () => {
       const d = new Date(a.date);
       return a.employeeId === currentEmployee?.id && a.isApproved &&
         (d.getMonth() + 1) === payrollMonth && d.getFullYear() === payrollYear;
-    }).sort((a, b) => a.date.localeCompare(b.date)); // 日付順ソート
+    }).sort((a, b) => a.date.localeCompare(b.date));
   }, [attendance, payrollMonth, payrollYear, currentEmployee]);
 
   const payrollData = useMemo(() => {
@@ -224,7 +219,7 @@ const EmployeeView: React.FC = () => {
               </select>
             </div>
             <p className="text-[11px] font-black text-lime-500 uppercase tracking-[0.4em] mb-4">Monthly Confirmed Earnings</p>
-            <h2 className="text-5xl font-black text-emerald-950 tracking-tighter mb-8">
+            <h2 className="text-5xl font-black text-emerald-950 tracking-tighter mb-8 overflow-hidden break-all px-4">
               {payrollData.totalPay.toLocaleString()} <span className="text-2xl">UZS</span>
             </h2>
             <div className="grid grid-cols-2 gap-8 py-8 border-t border-gray-50">
