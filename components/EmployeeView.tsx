@@ -10,11 +10,16 @@ const EmployeeView: React.FC = () => {
   const [tempPassword, setTempPassword] = useState('');
 
   const today = new Date();
+  // シフト申請用期間
   const [period, setPeriod] = useState<ShiftPeriod>({
     year: today.getFullYear(),
     month: today.getMonth() + 1,
     part: today.getDate() <= 15 ? 1 : 2
   });
+
+  // 給料明細用期間（申請期間とは別に独立して遡れるようにする）
+  const [payrollYear, setPayrollYear] = useState(today.getFullYear());
+  const [payrollMonth, setPayrollMonth] = useState(today.getMonth() + 1);
 
   const calculateHoursPrecise = (start: string, end: string) => {
     if (!start || !end) return 0;
@@ -41,24 +46,17 @@ const EmployeeView: React.FC = () => {
 
   const [localShifts, setLocalShifts] = useState<Record<string, Partial<ShiftRequest>>>({});
 
-  // 重要: データマージロジック
-  // attendance(実績)のうち isApproved(確定済み)なものがあれば、それを shifts(希望)より優先して表示
+  // データマージロジック
   useEffect(() => {
     const merged: Record<string, Partial<ShiftRequest>> = {};
-
-    // 1. ユーザーのシフト希望をセット
+    // 1. シフト希望
     shifts.filter(s => s.employeeId === currentEmployee?.id).forEach(s => {
       merged[s.date] = s;
     });
-
-    // 2. アドミン確定済みの実績で完全に上書き（これが公式スケジュールとなる）
+    // 2. 確定済み実績で上書き
     attendance.filter(a => a.employeeId === currentEmployee?.id && a.isApproved).forEach(a => {
-      merged[a.date] = {
-        ...a,
-        // attendanceのデータ（アドミンが修正した時間や店舗）を最優先
-      };
+      merged[a.date] = { ...a };
     });
-
     setLocalShifts(merged);
     if (currentEmployee) setTempPassword(currentEmployee.password);
   }, [shifts, attendance, currentEmployee]);
@@ -91,7 +89,6 @@ const EmployeeView: React.FC = () => {
     if (!currentEmployee) return;
     const currentPeriodShifts: ShiftRequest[] = currentPeriodDates.map(date => {
       const s = localShifts[date];
-      // 確定済みの日は編集せず、既存のシフト（または実績）を維持
       if (isDateApprovedByAdmin(date)) {
         return shifts.find(orig => orig.employeeId === currentEmployee.id && orig.date === date) || null;
       }
@@ -118,9 +115,10 @@ const EmployeeView: React.FC = () => {
   const filteredAttendance = useMemo(() => {
     return attendance.filter(a => {
       const d = new Date(a.date);
-      return a.employeeId === currentEmployee?.id && a.isApproved && d.getMonth() + 1 === period.month && d.getFullYear() === period.year;
-    });
-  }, [attendance, period, currentEmployee]);
+      return a.employeeId === currentEmployee?.id && a.isApproved &&
+        (d.getMonth() + 1) === payrollMonth && d.getFullYear() === payrollYear;
+    }).sort((a, b) => a.date.localeCompare(b.date)); // 日付順ソート
+  }, [attendance, payrollMonth, payrollYear, currentEmployee]);
 
   const payrollData = useMemo(() => {
     const rateToUse = currentEmployee?.hourlyRate || settings.globalHourlyRate;
@@ -216,43 +214,54 @@ const EmployeeView: React.FC = () => {
 
       {activeTab === 'PAYROLL' && (
         <div className="space-y-6 animate-in fade-in">
-          <div className="bg-white rounded-[3rem] p-12 border border-gray-50 text-center shadow-2xl">
-            <p className="text-[11px] font-black text-lime-500 uppercase tracking-[0.4em] mb-4">Total Confirmed Earning</p>
+          <div className="bg-white rounded-[3rem] p-10 border border-gray-50 text-center shadow-2xl relative overflow-hidden">
+            <div className="flex justify-center gap-2 mb-6">
+              <select value={payrollYear} onChange={(e) => setPayrollYear(Number(e.target.value))} className="bg-gray-100 rounded-xl px-4 py-2 text-[10px] font-black outline-none">
+                {[2024, 2025, 2026].map(y => <option key={y} value={y}>{y}</option>)}
+              </select>
+              <select value={payrollMonth} onChange={(e) => setPayrollMonth(Number(e.target.value))} className="bg-gray-100 rounded-xl px-4 py-2 text-[10px] font-black outline-none">
+                {Array.from({ length: 12 }, (_, i) => i + 1).map(m => <option key={m} value={m}>{String(m).padStart(2, '0')}</option>)}
+              </select>
+            </div>
+            <p className="text-[11px] font-black text-lime-500 uppercase tracking-[0.4em] mb-4">Monthly Confirmed Earnings</p>
             <h2 className="text-5xl font-black text-emerald-950 tracking-tighter mb-8">
               {payrollData.totalPay.toLocaleString()} <span className="text-2xl">UZS</span>
             </h2>
             <div className="grid grid-cols-2 gap-8 py-8 border-t border-gray-50">
-              <div>
-                <p className="text-[10px] font-black text-gray-300 uppercase mb-1">Total Hours</p>
-                <p className="font-black text-emerald-900 text-2xl">{payrollData.totalHours.toFixed(2)}h</p>
-              </div>
-              <div className="border-l border-gray-50">
-                <p className="text-[10px] font-black text-gray-300 uppercase mb-1">Hourly Rate</p>
-                <p className="font-black text-lime-600 text-xl">{payrollData.rate.toLocaleString()}</p>
-              </div>
+              <div><p className="text-[10px] font-black text-gray-300 uppercase mb-1">Total Hours</p><p className="font-black text-emerald-900 text-2xl">{payrollData.totalHours.toFixed(2)}h</p></div>
+              <div className="border-l border-gray-50"><p className="text-[10px] font-black text-gray-300 uppercase mb-1">Rate</p><p className="font-black text-lime-600 text-xl">{payrollData.rate.toLocaleString()}</p></div>
             </div>
           </div>
-          <div className="bg-white rounded-[2rem] border border-gray-100 divide-y divide-gray-50">
-            {filteredAttendance.map(a => (
-              <div key={a.id} className="p-6 flex justify-between items-center">
-                <div className="flex flex-col">
-                  <span className="font-black text-emerald-950">{a.date}</span>
-                  <span className="text-[10px] text-gray-400 font-bold uppercase">{a.startTime} → {a.endTime}</span>
+          <div className="bg-white rounded-[2.5rem] border border-gray-100 divide-y divide-gray-50 overflow-hidden shadow-sm">
+            <div className="p-4 bg-gray-50/50 flex justify-between items-center"><h3 className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Chronological Log</h3></div>
+            {filteredAttendance.length === 0 ? (
+              <div className="p-16 text-center text-gray-200 text-[10px] font-black uppercase tracking-widest italic">No data for this period</div>
+            ) : (
+              filteredAttendance.map(a => (
+                <div key={a.id} className="p-6 flex justify-between items-center hover:bg-emerald-50/50 transition-all">
+                  <div className="flex flex-col">
+                    <span className="font-black text-emerald-950 text-sm">{a.date.split('-')[2]} / {a.date.split('-')[1]}</span>
+                    <span className="text-[10px] text-gray-400 font-bold uppercase">{a.startTime} → {a.endTime}</span>
+                  </div>
+                  <div className="text-right">
+                    <span className="font-black text-emerald-950 text-lg">{(Math.round(calculateHoursPrecise(a.startTime, a.endTime) * payrollData.rate) + (a.bonus || 0)).toLocaleString()}</span>
+                    <span className="text-[10px] ml-1 text-gray-400 uppercase tracking-tighter">UZS</span>
+                  </div>
                 </div>
-                <div className="text-right">
-                  <span className="font-black text-emerald-950">{(Math.round(calculateHoursPrecise(a.startTime, a.endTime) * payrollData.rate) + (a.bonus || 0)).toLocaleString()} UZS</span>
-                </div>
-              </div>
-            ))}
+              ))
+            )}
           </div>
         </div>
       )}
 
       {activeTab === 'SETTINGS' && (
-        <div className="p-10 bg-white rounded-[3rem] text-center space-y-8">
+        <div className="p-10 bg-white rounded-[3rem] text-center space-y-8 animate-in fade-in">
+          <div className="w-20 h-20 bg-lime-100 text-lime-600 rounded-3xl flex items-center justify-center text-4xl mx-auto shadow-inner">🥬</div>
           <h2 className="text-2xl font-black text-emerald-950">{currentEmployee?.name}</h2>
-          <input type="text" className="w-full bg-gray-50 rounded-2xl px-6 py-4 font-black" value={tempPassword} onChange={(e) => setTempPassword(e.target.value)} />
-          <button onClick={() => { actions.updateEmployees(employees.map(e => e.id === currentEmployee?.id ? { ...e, password: tempPassword } : e)); alert('Key Updated'); }} className="w-full bg-emerald-950 text-white font-black py-5 rounded-2xl">UPDATE KEY</button>
+          <div className="space-y-4">
+            <input type="text" className="w-full bg-gray-50 border-2 border-transparent focus:border-lime-400 rounded-2xl px-6 py-4 font-black text-emerald-950 outline-none text-center shadow-inner" value={tempPassword} onChange={(e) => setTempPassword(e.target.value)} />
+            <button onClick={() => { actions.updateEmployees(employees.map(e => e.id === currentEmployee?.id ? { ...e, password: tempPassword } : e)); alert('Key Updated'); }} className="w-full bg-emerald-950 text-white font-black py-5 rounded-2xl shadow-xl hover:bg-black transition-all">UPDATE ACCESS KEY</button>
+          </div>
         </div>
       )}
     </div>
