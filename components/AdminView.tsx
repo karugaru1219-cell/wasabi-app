@@ -143,9 +143,42 @@ const AdminView: React.FC = () => {
     return payrollSummary.staffStats.find(s => s.id === selectedStatementEmployee);
   }, [selectedStatementEmployee, payrollSummary]);
 
+  const handleDownloadCSV = (s: any) => {
+    const headers = ["Date", "Branch", "Hours", "Rate", "Bonus", "Total"];
+    const rows = s.records.map((r: any) => {
+      const h = calculateHoursPrecise(r.startTime, r.endTime);
+      const branchName = branches.find(b => b.id === r.branchId)?.name || 'Unknown';
+      const total = Math.round(h * s.rate) + (r.bonus || 0);
+      return [r.date, branchName, h.toFixed(2), s.rate, r.bonus || 0, total];
+    });
+    const csvContent = "data:text/csv;charset=utf-8,"
+      + headers.join(",") + "\n"
+      + rows.map((e: any) => e.join(",")).join("\n");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `Statement_${s.name}_${summaryYear}_${summaryMonth}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+  };
+
+  const handlePrint = () => {
+    window.print();
+  };
+
   return (
     <div className="space-y-6 max-w-2xl mx-auto pb-32">
-      <nav className="flex bg-gray-100 p-1.5 rounded-[1.5rem] shadow-inner overflow-x-auto no-scrollbar">
+      <style>{`
+        @media print {
+          body * { visibility: hidden; }
+          .printable-area, .printable-area * { visibility: visible; }
+          .printable-area { position: absolute; left: 0; top: 0; width: 100%; }
+          .no-print { display: none !important; }
+        }
+      `}</style>
+
+      <nav className="flex bg-gray-100 p-1.5 rounded-[1.5rem] shadow-inner overflow-x-auto no-scrollbar no-print">
         {(['DAILY', 'CALENDAR', 'PAYROLL', 'MASTER', 'LOGS'] as const).map(tab => (
           <button
             key={tab}
@@ -158,7 +191,7 @@ const AdminView: React.FC = () => {
       </nav>
 
       {activeTab === 'DAILY' && (
-        <div className="space-y-6 animate-in fade-in">
+        <div className="space-y-6 animate-in fade-in no-print">
           <div className="bg-white p-7 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col gap-6">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-6">
               <div className="space-y-1 w-full sm:w-auto text-center sm:text-left">
@@ -248,7 +281,7 @@ const AdminView: React.FC = () => {
 
       {activeTab === 'PAYROLL' && (
         <div className="space-y-6 animate-in fade-in">
-          <div className="bg-emerald-950 text-white p-10 rounded-[3rem] shadow-2xl relative overflow-hidden">
+          <div className="bg-emerald-950 text-white p-10 rounded-[3rem] shadow-2xl relative overflow-hidden no-print">
             <div className="absolute top-0 right-0 w-64 h-64 bg-lime-500/10 rounded-full -mr-32 -mt-32 blur-3xl"></div>
             <div className="relative z-10 flex flex-col sm:flex-row justify-between items-center gap-6">
               <div className="text-center sm:text-left">
@@ -269,7 +302,7 @@ const AdminView: React.FC = () => {
             </div>
           </div>
 
-          <div className="bg-white rounded-[2.5rem] border border-gray-100 divide-y divide-gray-50 overflow-hidden shadow-sm">
+          <div className="bg-white rounded-[2.5rem] border border-gray-100 divide-y divide-gray-50 overflow-hidden shadow-sm no-print">
             {payrollSummary.staffStats.map(s => (
               <div key={s.id} className="p-7 flex justify-between items-center hover:bg-gray-50/50 transition-all">
                 <div>
@@ -286,27 +319,44 @@ const AdminView: React.FC = () => {
 
           {activeStatement && (
             <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-emerald-950/80 backdrop-blur-sm animate-in fade-in">
-              <div className="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl flex flex-col max-h-[90vh]">
+              <div className="bg-white w-full max-w-lg rounded-[3rem] shadow-2xl flex flex-col max-h-[90vh] printable-area overflow-hidden">
                 <div className="p-8 bg-emerald-950 text-white flex justify-between items-center shrink-0">
-                  <h3 className="text-2xl font-black tracking-tighter uppercase">{activeStatement.name}'s Statement</h3>
-                  <button onClick={() => setSelectedStatementEmployee(null)} className="w-10 h-10 flex items-center justify-center bg-white/10 rounded-full hover:bg-white/20 transition-all"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6L6 18M6 6l12 12" /></svg></button>
+                  <div className="flex flex-col">
+                    <h3 className="text-2xl font-black tracking-tighter uppercase">{activeStatement.name}'s Statement</h3>
+                    <p className="text-[10px] font-black text-lime-400 uppercase tracking-widest">{summaryYear} / {String(summaryMonth).padStart(2, '0')}</p>
+                  </div>
+                  <button onClick={() => setSelectedStatementEmployee(null)} className="w-10 h-10 flex items-center justify-center bg-white/10 rounded-full hover:bg-white/20 transition-all no-print"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M18 6L6 18M6 6l12 12" /></svg></button>
                 </div>
+
                 <div className="p-8 overflow-y-auto no-scrollbar flex-1 space-y-6">
                   <div className="grid grid-cols-2 gap-4">
-                    <div className="p-5 bg-gray-50 rounded-[2rem]"><p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Worked Hrs</p><p className="text-2xl font-black text-emerald-950">{activeStatement.hours.toFixed(2)}h</p></div>
-                    <div className="p-5 bg-gray-50 rounded-[2rem]"><p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Bonuses</p><p className="text-2xl font-black text-emerald-950">{activeStatement.bonus.toLocaleString()} UZS</p></div>
+                    <div className="p-5 bg-gray-50 rounded-[2rem] border border-gray-100">
+                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Worked Hours</p>
+                      <p className="text-2xl font-black text-emerald-950">{activeStatement.hours.toFixed(2)}h</p>
+                    </div>
+                    <div className="p-5 bg-gray-50 rounded-[2rem] border border-gray-100">
+                      <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Bonus</p>
+                      <p className="text-2xl font-black text-emerald-950">{activeStatement.bonus.toLocaleString()} <span className="text-xs">UZS</span></p>
+                    </div>
                   </div>
+
                   <div className="border border-gray-100 rounded-[2.5rem] overflow-hidden">
                     <table className="w-full text-left">
-                      <thead className="bg-gray-50 text-[9px] font-black uppercase text-gray-400"><tr><th className="px-6 py-4">Date</th><th className="px-6 py-4">Hrs</th><th className="px-6 py-4 text-right">Earning</th></tr></thead>
+                      <thead className="bg-gray-50 text-[9px] font-black uppercase text-gray-400">
+                        <tr>
+                          <th className="px-6 py-4">Date</th>
+                          <th className="px-6 py-4">Hrs</th>
+                          <th className="px-6 py-4 text-right">Earning</th>
+                        </tr>
+                      </thead>
                       <tbody className="divide-y divide-gray-50">
                         {activeStatement.records.map(r => {
                           const h = calculateHoursPrecise(r.startTime, r.endTime);
                           const pay = Math.round(h * activeStatement.rate) + (r.bonus || 0);
                           return (
-                            <tr key={r.id} className="text-[12px] font-black text-emerald-950">
+                            <tr key={r.id} className="text-[12px] font-black text-emerald-950 hover:bg-gray-50/50">
                               <td className="px-6 py-4">{r.date.split('-')[2]}</td>
-                              <td className="px-6 py-4">{h.toFixed(1)}</td>
+                              <td className="px-6 py-4">{h.toFixed(1)}h</td>
                               <td className="px-6 py-4 text-right">{pay.toLocaleString()}</td>
                             </tr>
                           );
@@ -314,10 +364,35 @@ const AdminView: React.FC = () => {
                       </tbody>
                     </table>
                   </div>
+
+                  {/* Print only footer */}
+                  <div className="hidden print:block pt-10 border-t border-dashed border-gray-300">
+                    <p className="text-[10px] font-black text-gray-400 uppercase text-center mb-1">Issued by WASABI MONEY System</p>
+                    <p className="text-[8px] text-gray-300 text-center uppercase tracking-widest">{new Date().toLocaleString()}</p>
+                  </div>
                 </div>
-                <div className="p-8 bg-gray-50 border-t border-gray-100 shrink-0 flex justify-between items-center">
-                  <p className="text-4xl font-black text-emerald-950">{activeStatement.total.toLocaleString()} <span className="text-lg">UZS</span></p>
-                  <button onClick={() => setSelectedStatementEmployee(null)} className="bg-emerald-950 text-white font-black px-8 py-4 rounded-[1.5rem] text-[10px] uppercase tracking-widest">Close</button>
+
+                <div className="p-8 bg-gray-50 border-t border-gray-100 shrink-0 flex flex-col gap-4 no-print">
+                  <div className="flex justify-between items-center">
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Grand Total</p>
+                    <p className="text-4xl font-black text-emerald-950">{activeStatement.total.toLocaleString()} <span className="text-lg">UZS</span></p>
+                  </div>
+                  <div className="grid grid-cols-2 gap-3">
+                    <button
+                      onClick={() => handleDownloadCSV(activeStatement)}
+                      className="flex items-center justify-center gap-2 bg-emerald-100 text-emerald-700 font-black py-4 rounded-[1.5rem] text-[9px] uppercase tracking-widest hover:bg-emerald-200 transition-all"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" /></svg>
+                      Download CSV
+                    </button>
+                    <button
+                      onClick={handlePrint}
+                      className="flex items-center justify-center gap-2 bg-emerald-950 text-white font-black py-4 rounded-[1.5rem] text-[9px] uppercase tracking-widest hover:bg-black shadow-xl transition-all"
+                    >
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"><polyline points="6 9 6 2 18 2 18 9" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect x="6" y="14" width="12" height="8" /></svg>
+                      Issue PDF / Print
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -326,7 +401,7 @@ const AdminView: React.FC = () => {
       )}
 
       {activeTab === 'MASTER' && (
-        <div className="space-y-8 pb-20">
+        <div className="space-y-8 pb-20 no-print">
           <section className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-xl space-y-6">
             <h3 className="text-xs font-black uppercase tracking-[0.3em] text-emerald-950">Staff Registry</h3>
             <div className="grid gap-4">
@@ -348,7 +423,7 @@ const AdminView: React.FC = () => {
         </div>
       )}
 
-      {activeTab === 'LOGS' && <ActionLogList />}
+      {activeTab === 'LOGS' && <div className="no-print"><ActionLogList /></div>}
     </div>
   );
 };
